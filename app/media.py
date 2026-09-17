@@ -1,12 +1,29 @@
 import os
 import subprocess
 from pathlib import Path
+from PIL import Image, ImageDraw, ImageFont
+import asyncio
 
-from .config import settings
+try:
+    import edge_tts
+except ImportError:
+    edge_tts = None
 
 
 OUTPUT_DIR = Path("output")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def get_resolution():
+    resolution = os.getenv("VIDEO_RESOLUTION", "4k").lower()
+
+    if resolution == "8k":
+        return 7680, 4320
+
+    if resolution == "1080p":
+        return 1920, 1080
+
+    return 3840, 2160
 
 
 def create_voice(
@@ -14,8 +31,7 @@ def create_voice(
     output_file: str = "output/voice.mp3"
 ):
     """
-    Voice generation hook.
-    Actual TTS provider baad mein connect kiya ja sakta hai.
+    Hindi AI voice generation.
     """
 
     output_path = Path(output_file)
@@ -24,22 +40,143 @@ def create_voice(
         exist_ok=True
     )
 
-    # TTS provider connect hone tak placeholder.
+    if not text:
+        return {
+            "status": "error",
+            "message": "Script is empty."
+        }
+
+    if edge_tts is None:
+        return {
+            "status": "error",
+            "message": "edge-tts is not installed."
+        }
+
+    async def generate():
+        voice = "hi-IN-SwaraNeural"
+
+        communicator = edge_tts.Communicate(
+            text,
+            voice
+        )
+
+        await communicator.save(
+            str(output_path)
+        )
+
+    try:
+        asyncio.run(generate())
+
+        return {
+            "status": "success",
+            "file": str(output_path)
+        }
+
+    except Exception as error:
+        return {
+            "status": "error",
+            "message": str(error)
+        }
+
+
+def create_visual(
+    title: str,
+    output_file: str = "output/background.jpg"
+):
+    """
+    Non-black visual background.
+    """
+
+    width, height = get_resolution()
+
+    image = Image.new(
+        "RGB",
+        (width, height)
+    )
+
+    pixels = image.load()
+
+    for y in range(height):
+        ratio = y / max(height - 1, 1)
+
+        r = int(20 + 60 * ratio)
+        g = int(40 + 50 * ratio)
+        b = int(90 + 80 * ratio)
+
+        for x in range(width):
+            pixels[x, y] = (
+                r,
+                g,
+                b
+            )
+
+    draw = ImageDraw.Draw(image)
+
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    ]
+
+    font = None
+
+    for path in font_paths:
+        if os.path.exists(path):
+            font = ImageFont.truetype(
+                path,
+                max(50, width // 35)
+            )
+            break
+
+    if font is None:
+        font = ImageFont.load_default()
+
+    text = title[:120]
+
+    bbox = draw.textbbox(
+        (0, 0),
+        text,
+        font=font
+    )
+
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    x = (width - text_width) // 2
+    y = (height - text_height) // 2
+
+    draw.text(
+        (x + 5, y + 5),
+        text,
+        font=font,
+        fill=(0, 0, 0)
+    )
+
+    draw.text(
+        (x, y),
+        text,
+        font=font,
+        fill=(255, 255, 255)
+    )
+
+    image.save(
+        output_file,
+        quality=95
+    )
+
     return {
-        "status": "pending",
-        "file": str(output_path),
-        "message": "TTS provider not connected yet."
+        "status": "success",
+        "file": output_file,
+        "resolution": f"{width}x{height}"
     }
 
 
 def render_video(
     voice_file: str,
-    output_file: str = "output/video_4k.mp4",
-    width: int = 3840,
-    height: int = 2160
+    visual_file: str,
+    output_file: str = "output/video.mp4"
 ):
     """
-    FFmpeg ke through 4K video render karta hai.
+    Creates a real MP4 video using FFmpeg.
     """
 
     output_path = Path(output_file)
@@ -51,32 +188,46 @@ def render_video(
     if not os.path.exists(voice_file):
         return {
             "status": "error",
-            "message": "Voice file not found.",
-            "file": str(output_path)
+            "message": "Voice file not found."
         }
+
+    if not os.path.exists(visual_file):
+        return {
+            "status": "error",
+            "message": "Visual file not found."
+        }
+
+    width, height = get_resolution()
 
     command = [
         "ffmpeg",
         "-y",
 
+        "-loop",
+        "1",
+
+        "-i",
+        visual_file,
+
         "-i",
         voice_file,
 
         "-vf",
-        (
-            f"scale={width}:{height}:"
-            "force_original_aspect_ratio=decrease,"
-            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
-        ),
+        f"scale={width}:{height}:"
+        "force_original_aspect_ratio=increase,"
+        f"crop={width}:{height}",
 
         "-c:v",
         "libx264",
 
         "-preset",
-        "medium",
+        "veryfast",
 
         "-crf",
-        "18",
+        "20",
+
+        "-pix_fmt",
+        "yuv420p",
 
         "-c:a",
         "aac",
@@ -84,10 +235,12 @@ def render_video(
         "-b:a",
         "192k",
 
+        "-shortest",
+
         "-movflags",
         "+faststart",
 
-        str(output_path)
+        output_file
     ]
 
     try:
@@ -99,51 +252,89 @@ def render_video(
 
         return {
             "status": "success",
-            "file": str(output_path),
-            "resolution": "3840x2160"
+            "file": output_file,
+            "resolution": f"{width}x{height}"
         }
 
-    except FileNotFoundError:
+    except Exception as error:
 
         return {
             "status": "error",
-            "message": "FFmpeg is not installed.",
-            "file": str(output_path)
-        }
-
-    except subprocess.CalledProcessError as error:
-
-        return {
-            "status": "error",
-            "message": str(error),
-            "file": str(output_path)
+            "message": str(error)
         }
 
 
 def create_thumbnail(
     text: str,
-    output_file: str = "output/thumbnail.txt"
+    output_file: str = "output/thumbnail.jpg"
 ):
     """
-    Thumbnail generation hook.
-    Actual image-generation service baad mein connect hoga.
+    Creates a real thumbnail image.
     """
 
-    output_path = Path(output_file)
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True
+    width = 1280
+    height = 720
+
+    image = Image.new(
+        "RGB",
+        (width, height),
+        (30, 30, 60)
     )
 
-    output_path.write_text(
-        text[:100],
-        encoding="utf-8"
+    draw = ImageDraw.Draw(image)
+
+    font_path = (
+        "/usr/share/fonts/truetype/dejavu/"
+        "DejaVuSans-Bold.ttf"
+    )
+
+    if os.path.exists(font_path):
+
+        font = ImageFont.truetype(
+            font_path,
+            70
+        )
+
+    else:
+
+        font = ImageFont.load_default()
+
+    title = text[:70]
+
+    bbox = draw.textbbox(
+        (0, 0),
+        title,
+        font=font
+    )
+
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    x = (width - text_width) // 2
+    y = (height - text_height) // 2
+
+    draw.text(
+        (x + 5, y + 5),
+        title,
+        font=font,
+        fill=(0, 0, 0)
+    )
+
+    draw.text(
+        (x, y),
+        title,
+        font=font,
+        fill=(255, 255, 255)
+    )
+
+    image.save(
+        output_file,
+        quality=95
     )
 
     return {
         "status": "success",
-        "file": str(output_path),
-        "text": text[:100]
+        "file": output_file
     }
 
 
@@ -152,16 +343,41 @@ def prepare_media(
     title: str
 ):
     """
-    Complete media preparation flow.
+    Complete media generation:
+    Voice → Visual → Video → Thumbnail
     """
 
-    voice = create_voice(script)
+    voice = create_voice(
+        script,
+        "output/voice.mp3"
+    )
+
+    if voice.get("status") != "success":
+        return {
+            "voice": voice,
+            "status": "error"
+        }
+
+    visual = create_visual(
+        title,
+        "output/background.jpg"
+    )
+
+    video = render_video(
+        voice_file=voice["file"],
+        visual_file=visual["file"],
+        output_file="output/video.mp4"
+    )
 
     thumbnail = create_thumbnail(
-        title
+        title,
+        "output/thumbnail.jpg"
     )
 
     return {
+        "status": "success",
         "voice": voice,
+        "visual": visual,
+        "video": video,
         "thumbnail": thumbnail
-  }
+    }
