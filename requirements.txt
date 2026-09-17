@@ -4,3 +4,5 @@ apscheduler
 pydantic
 requests
 feedparser
+Pillow
+edge-tts
