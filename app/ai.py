@@ -1,27 +1,40 @@
 import json
-import os
+import requests
 from typing import Dict
 
 from .config import settings
 
 
 SYSTEM_PROMPT = """
-You are an AI content production assistant.
+You are a professional Hindi YouTube video script writer.
 
-Create original Hindi video content.
+Create ORIGINAL, natural and engaging Hindi content.
 
-The output must include:
-1. Video title
-2. Full Hindi script
-3. Description
-4. Keywords
-5. Tags
-6. Hashtags
-7. Thumbnail text
+The script must be long enough for the requested video duration.
 
-Write naturally and clearly.
-Do not copy articles word-for-word.
-Avoid unsupported claims.
+Approximate narration speed:
+130 Hindi words per minute.
+
+The script must:
+- have a strong opening hook
+- be easy to understand
+- have a natural storytelling flow
+- contain multiple sections
+- avoid unnecessary repetition
+- end with a natural conclusion
+- not copy articles word-for-word
+- avoid unsupported claims
+
+Return ONLY valid JSON.
+
+Required JSON keys:
+title
+script
+description
+keywords
+tags
+hashtags
+thumbnail_text
 """
 
 
@@ -34,22 +47,28 @@ def generate_content(
     if not topic:
         topic = "आज की रोचक कहानी"
 
-    # API key is added later through environment variables.
+    duration_minutes = max(1, int(duration_minutes))
+
+    # लगभग 130 शब्द प्रति मिनट
+    target_words = duration_minutes * 130
+
     api_key = settings.ai_api_key
 
+    # API key नहीं है
     if not api_key:
+
         return {
             "title": topic,
             "script": (
                 f"{topic}\n\n"
-                "यह एक प्रारंभिक स्क्रिप्ट है। "
-                "AI API connect करने के बाद "
-                "पूरा long-form script automatically "
-                "generate होगा।"
+                "AI API key अभी connect नहीं की गई है।\n\n"
+                f"जब AI API key connect होगी, "
+                f"तब लगभग {target_words} शब्दों की "
+                f"{duration_minutes} मिनट की पूरी Hindi script "
+                "automatically generate होगी।"
             ),
             "description": (
-                f"{topic} पर यह वीडियो "
-                "जानकारी और मनोरंजन के लिए तैयार किया गया है।"
+                f"{topic} पर Hindi long-form video."
             ),
             "keywords": [
                 "Hindi video",
@@ -59,42 +78,72 @@ def generate_content(
             ],
             "tags": [
                 "hindi",
-                "viral",
                 "trending",
-                "shorts"
+                "viral",
+                "long video"
             ],
             "hashtags": [
                 "#Hindi",
                 "#Trending",
                 "#Viral",
-                "#Shorts"
+                "#LongVideo"
             ],
-            "thumbnail_text": topic[:45]
+            "thumbnail_text": topic[:45],
+            "word_target": target_words,
+            "duration_minutes": duration_minutes,
+            "api_connected": False
         }
-
-    # -----------------------------------------
-    # AI provider integration
-    # -----------------------------------------
-    #
-    # यहां actual AI API बाद में connect होगा.
-    #
-    # अभी हम provider-neutral structure रखते हैं
-    # ताकि API key को GitHub code में hard-code
-    # न करना पड़े.
-    #
 
     try:
 
-        import requests
+        user_prompt = f"""
+Topic:
+{topic}
+
+Language:
+{language}
+
+Target duration:
+{duration_minutes} minutes
+
+Target script length:
+approximately {target_words} Hindi words.
+
+Create the COMPLETE narration script.
+
+Do not give an outline.
+
+Do not give a short summary.
+
+Write the actual narration that can be converted directly into voice.
+
+Structure it with:
+1. Strong opening hook
+2. Introduction
+3. Main story/information
+4. Several interesting sections
+5. Important details
+6. Smooth transitions
+7. Conclusion
+
+The final script should be approximately
+{target_words} words.
+"""
 
         response = requests.post(
             "https://api.openai.com/v1/chat/completions",
+
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             },
+
             json={
-                "model": settings.ai_model or "gpt-4o-mini",
+                "model": (
+                    settings.ai_model
+                    or "gpt-5.6-luna"
+                ),
+
                 "messages": [
                     {
                         "role": "system",
@@ -102,20 +151,22 @@ def generate_content(
                     },
                     {
                         "role": "user",
-                        "content": (
-                            f"Topic: {topic}\n"
-                            f"Language: {language}\n"
-                            f"Duration: "
-                            f"{duration_minutes} minutes\n\n"
-                            "Return valid JSON with these keys: "
-                            "title, script, description, keywords, "
-                            "tags, hashtags, thumbnail_text."
-                        )
+                        "content": user_prompt
                     }
                 ],
-                "temperature": 0.8
+
+                "temperature": 0.8,
+
+                "max_tokens": min(
+                    24000,
+                    max(
+                        4000,
+                        target_words * 3
+                    )
+                )
             },
-            timeout=120
+
+            timeout=300
         )
 
         response.raise_for_status()
@@ -128,20 +179,97 @@ def generate_content(
             ["content"]
         )
 
-        return json.loads(content)
+        # कभी-कभी model JSON को ```json ... ``` में देता है
+        content = content.strip()
+
+        if content.startswith("```"):
+            content = content.replace(
+                "```json",
+                "",
+                1
+            )
+
+            if content.endswith("```"):
+                content = content[:-3]
+
+            content = content.strip()
+
+        result = json.loads(content)
+
+        # जरूरी fields सुनिश्चित करें
+        result.setdefault(
+            "title",
+            topic
+        )
+
+        result.setdefault(
+            "script",
+            ""
+        )
+
+        result.setdefault(
+            "description",
+            ""
+        )
+
+        result.setdefault(
+            "keywords",
+            []
+        )
+
+        result.setdefault(
+            "tags",
+            []
+        )
+
+        result.setdefault(
+            "hashtags",
+            []
+        )
+
+        result.setdefault(
+            "thumbnail_text",
+            topic[:45]
+        )
+
+        result["duration_minutes"] = (
+            duration_minutes
+        )
+
+        result["target_words"] = (
+            target_words
+        )
+
+        result["api_connected"] = True
+
+        return result
 
     except Exception as error:
 
         return {
             "title": topic,
+
             "script": (
                 f"{topic}\n\n"
-                "AI generation failed temporarily."
+                "AI script generation में "
+                "temporary error आया है।"
             ),
+
             "description": "",
+
             "keywords": [],
+
             "tags": [],
+
             "hashtags": [],
+
             "thumbnail_text": topic[:45],
+
+            "duration_minutes": duration_minutes,
+
+            "target_words": target_words,
+
+            "api_connected": True,
+
             "error": str(error)
-              }
+        }
