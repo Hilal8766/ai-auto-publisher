@@ -2,45 +2,96 @@ name: AI Auto Publisher
 
 on:
   workflow_dispatch:
+    inputs:
+      duration:
+        description: "Video duration in minutes"
+        required: true
+        default: "10"
+
+      resolution:
+        description: "Video resolution"
+        required: true
+        default: "4k"
+        type: choice
+        options:
+          - 1080p
+          - 4k
+          - 8k
 
   schedule:
     - cron: "30 4 * * *"
 
+
 jobs:
+
   run-agent:
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
       - name: Setup Python
         uses: actions/setup-python@v5
+
         with:
           python-version: "3.11"
 
+
       - name: Install dependencies
         run: |
+
           python -m pip install --upgrade pip
+
           pip install -r requirements.txt
 
-      - name: Run AI Agent
+
+      - name: Install FFmpeg
+        run: |
+
+          sudo apt-get update
+
+          sudo apt-get install -y ffmpeg
+
+
+      - name: Generate AI Video
+
         env:
+
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
+
           AI_MODEL: ${{ secrets.AI_MODEL }}
+
           TTS_API_KEY: ${{ secrets.TTS_API_KEY }}
+
           MEDIA_API_KEY: ${{ secrets.MEDIA_API_KEY }}
 
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          VIDEO_RESOLUTION: ${{ inputs.resolution || '4k' }}
 
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+          VIDEO_DURATION: ${{ inputs.duration || '10' }}
 
-          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
-
-          PUBLISH_MODE: dry_run
           TIMEZONE: Asia/Kolkata
 
+          PUBLISH_MODE: dry_run
+
         run: |
-          python -c "from app.pipeline import run_pipeline; print(run_pipeline(language='Hindi', duration_minutes=10))"
+
+          python -c "from app.pipeline import run_pipeline; print(run_pipeline(language='Hindi', duration_minutes=int('${{ inputs.duration || '10' }}')))"
+
+
+      - name: Upload generated files
+
+        if: always()
+
+        uses: actions/upload-artifact@v4
+
+        with:
+
+          name: generated-video
+
+          path: output/
+
+          if-no-files-found: warn
