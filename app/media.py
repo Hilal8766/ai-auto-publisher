@@ -15,20 +15,18 @@ except ImportError:
 
 OUTPUT_DIR = Path("output")
 SCENE_DIR = OUTPUT_DIR / "scenes"
-CLIP_DIR = OUTPUT_DIR / "clips"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SCENE_DIR.mkdir(parents=True, exist_ok=True)
-CLIP_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_resolution():
-    resolution = os.getenv("VIDEO_RESOLUTION", "4k").lower()
+    value = os.getenv("VIDEO_RESOLUTION", "4k").lower()
 
-    if resolution == "8k":
+    if value == "8k":
         return 7680, 4320
 
-    if resolution == "1080p":
+    if value == "1080p":
         return 1920, 1080
 
     return 3840, 2160
@@ -68,7 +66,6 @@ def create_voice(text, output_file="output/voice.mp3"):
             text=text,
             voice="hi-IN-SwaraNeural"
         )
-
         await communicator.save(str(output_path))
 
     try:
@@ -106,15 +103,17 @@ def split_story(script, maximum=30):
     if len(parts) <= maximum:
         return parts
 
-    scenes = []
-
     group_size = max(
         1,
         math.ceil(len(parts) / maximum)
     )
 
+    scenes = []
+
     for i in range(0, len(parts), group_size):
-        chunk = " ".join(parts[i:i + group_size])
+        chunk = " ".join(
+            parts[i:i + group_size]
+        )
 
         if chunk:
             scenes.append(chunk)
@@ -126,82 +125,52 @@ def split_story(script, maximum=30):
 
 
 def detect_scene(text):
-    value = text.lower()
+    t = text.lower()
 
-    if any(word in value for word in [
-        "जंगल",
-        "वन",
-        "शेर",
-        "भालू",
-        "हाथी",
-        "जानवर",
-        "पेड़"
+    if any(x in t for x in [
+        "जंगल", "वन", "शेर", "भालू",
+        "हाथी", "जानवर", "पेड़"
     ]):
         return "forest"
 
-    if any(word in value for word in [
-        "गांव",
-        "गाँव",
-        "किसान",
-        "खेत",
-        "घर",
-        "गरीब"
+    if any(x in t for x in [
+        "गांव", "गाँव", "किसान",
+        "खेत", "गरीब", "घर"
     ]):
         return "village"
 
-    if any(word in value for word in [
-        "शहर",
-        "बाजार",
-        "सड़क",
-        "कार",
-        "बस",
-        "दुकान"
+    if any(x in t for x in [
+        "शहर", "बाजार", "सड़क",
+        "कार", "बस", "दुकान"
     ]):
         return "city"
 
-    if any(word in value for word in [
-        "रात",
-        "अंधेरा",
-        "भूत",
-        "डर",
-        "हॉरर",
-        "रहस्य",
-        "सुनसान"
+    if any(x in t for x in [
+        "रात", "अंधेरा", "भूत",
+        "डर", "रहस्य", "सुनसान"
     ]):
         return "night"
 
-    if any(word in value for word in [
-        "स्कूल",
-        "पढ़ाई",
-        "किताब",
-        "अध्यापक",
-        "मास्टर"
+    if any(x in t for x in [
+        "स्कूल", "पढ़ाई", "किताब",
+        "अध्यापक", "मास्टर"
     ]):
         return "school"
 
-    if any(word in value for word in [
-        "राजा",
-        "रानी",
-        "महल",
-        "राजकुमार",
-        "राजकुमारी"
+    if any(x in t for x in [
+        "राजा", "रानी", "महल",
+        "राजकुमार", "राजकुमारी"
     ]):
         return "palace"
 
-    if any(word in value for word in [
-        "नदी",
-        "तालाब",
-        "समुद्र",
-        "बारिश",
-        "नाव"
+    if any(x in t for x in [
+        "नदी", "तालाब", "समुद्र",
+        "बारिश", "नाव"
     ]):
         return "water"
 
-    if any(word in value for word in [
-        "पहाड़",
-        "पर्वत",
-        "यात्रा",
-        "सफर"
+    if any(x in t for x in [
+        "पहाड़", "पर्वत", "यात्रा", "सफर"
     ]):
         return "mountain"
 
@@ -209,71 +178,49 @@ def detect_scene(text):
 
 
 def draw_background(draw, width, height, scene):
-    sky_colors = {
-        "forest": (95, 175, 225),
-        "village": (115, 190, 235),
-        "city": (105, 160, 215),
+    sky = {
+        "forest": (100, 180, 225),
+        "village": (120, 195, 235),
+        "city": (110, 170, 220),
         "night": (25, 35, 75),
-        "school": (120, 190, 235),
+        "school": (120, 195, 235),
         "palace": (130, 180, 230),
         "water": (100, 190, 230),
         "mountain": (125, 190, 235),
-    }
+    }.get(scene, (120, 195, 235))
 
-    ground_colors = {
-        "forest": (45, 120, 60),
-        "village": (105, 155, 65),
+    ground = {
+        "forest": (45, 125, 60),
+        "village": (110, 160, 70),
         "city": (75, 80, 90),
         "night": (30, 45, 50),
         "school": (100, 155, 75),
         "palace": (110, 150, 75),
         "water": (40, 130, 175),
-        "mountain": (75, 120, 85),
-    }
-
-    sky = sky_colors.get(
-        scene,
-        (115, 190, 235)
-    )
-
-    ground = ground_colors.get(
-        scene,
-        (105, 155, 65)
-    )
+        "mountain": (80, 125, 90),
+    }.get(scene, (110, 160, 70))
 
     draw.rectangle(
         [0, 0, width, height],
         fill=sky
     )
 
-    # Sun / moon
     if scene == "night":
-        draw.ellipse(
-            [
-                int(width * 0.75),
-                int(height * 0.08),
-                int(width * 0.85),
-                int(height * 0.18)
-            ],
-            fill=(245, 240, 190)
-        )
+        sun_color = (245, 240, 190)
     else:
-        draw.ellipse(
-            [
-                int(width * 0.74),
-                int(height * 0.08),
-                int(width * 0.84),
-                int(height * 0.18)
-            ],
-            fill=(255, 220, 80)
-        )
+        sun_color = (255, 220, 80)
 
-    # Mountains
-    if scene in [
-        "mountain",
-        "village",
-        "water"
-    ]:
+    draw.ellipse(
+        [
+            int(width * 0.74),
+            int(height * 0.08),
+            int(width * 0.84),
+            int(height * 0.18)
+        ],
+        fill=sun_color
+    )
+
+    if scene in ["mountain", "village", "water"]:
         points = [
             (0, int(height * 0.63)),
             (int(width * 0.18), int(height * 0.38)),
@@ -281,7 +228,7 @@ def draw_background(draw, width, height, scene):
             (int(width * 0.48), int(height * 0.30)),
             (int(width * 0.68), int(height * 0.62)),
             (int(width * 0.84), int(height * 0.40)),
-            (width, int(height * 0.63))
+            (width, int(height * 0.63)),
         ]
 
         draw.polygon(
@@ -301,33 +248,26 @@ def draw_background(draw, width, height, scene):
 
 
 def draw_tree(draw, x, y, scale=1.0):
-    trunk_width = int(45 * scale)
-    trunk_height = int(150 * scale)
+    trunk_w = int(45 * scale)
+    trunk_h = int(150 * scale)
 
     draw.rectangle(
-        [
-            x,
-            y,
-            x + trunk_width,
-            y + trunk_height
-        ],
+        [x, y, x + trunk_w, y + trunk_h],
         fill=(105, 65, 35)
     )
 
-    leaves = [
+    for dx, dy, radius in [
         (0, 0, 90),
         (65, -35, 80),
         (-55, -25, 75),
-        (30, -85, 70)
-    ]
-
-    for dx, dy, radius in leaves:
+        (30, -85, 70),
+    ]:
         draw.ellipse(
             [
                 int(x + dx - radius),
                 int(y + dy - radius),
                 int(x + dx + radius),
-                int(y + dy + radius)
+                int(y + dy + radius),
             ],
             fill=(40, 135, 60)
         )
@@ -337,101 +277,81 @@ def draw_house(draw, width, height):
     x = int(width * 0.12)
     y = int(height * 0.42)
 
-    house_width = int(width * 0.30)
-    house_height = int(height * 0.25)
+    w = int(width * 0.30)
+    h = int(height * 0.25)
 
     draw.rectangle(
-        [
-            x,
-            y,
-            x + house_width,
-            y + house_height
-        ],
+        [x, y, x + w, y + h],
         fill=(225, 165, 105)
     )
 
     draw.polygon(
         [
             (x - 35, y),
-            (
-                x + house_width // 2,
-                int(y - house_height * 0.55)
-            ),
-            (x + house_width + 35, y)
+            (x + w // 2, int(y - h * 0.55)),
+            (x + w + 35, y),
         ],
         fill=(150, 60, 45)
     )
 
     draw.rectangle(
         [
-            x + int(house_width * 0.42),
-            y + int(house_height * 0.50),
-            x + int(house_width * 0.62),
-            y + house_height
+            x + int(w * 0.42),
+            y + int(h * 0.50),
+            x + int(w * 0.62),
+            y + h,
         ],
         fill=(90, 60, 45)
     )
 
 
-def draw_school(draw, width, height):
-    x1 = int(width * 0.10)
-    y1 = int(height * 0.36)
+def draw_city(draw, width, height):
+    for i in range(8):
+        x = int(width * (0.02 + i * 0.13))
+        h = int(height * (0.20 + (i % 4) * 0.08))
 
-    x2 = int(width * 0.48)
-    y2 = int(height * 0.64)
+        draw.rectangle(
+            [
+                x,
+                int(height * 0.62) - h,
+                x + int(width * 0.09),
+                int(height * 0.62),
+            ],
+            fill=(70, 75, 100)
+        )
+
+
+def draw_school(draw, width, height):
+    left = int(width * 0.10)
+    top = int(height * 0.36)
+    right = int(width * 0.48)
+    bottom = int(height * 0.64)
 
     draw.rectangle(
-        [x1, y1, x2, y2],
+        [left, top, right, bottom],
         fill=(235, 190, 90)
     )
 
     draw.polygon(
         [
-            (
-                int(width * 0.06),
-                y1
-            ),
-            (
-                int(width * 0.29),
-                int(height * 0.18)
-            ),
-            (
-                int(width * 0.52),
-                y1
-            )
+            (int(width * 0.06), top),
+            (int(width * 0.29), int(height * 0.18)),
+            (int(width * 0.52), top),
         ],
         fill=(150, 70, 50)
     )
 
     for i in range(3):
-        wx = int(width * (0.16 + i * 0.09))
-
-        draw.rectangle(
-            [
-                wx,
-                int(height * 0.43),
-                wx + int(width * 0.05),
-                int(height * 0.54)
-            ],
-            fill=(90, 160, 210)
-        )
-
-
-def draw_city(draw, width, height):
-    for i in range(8):
-        x = int(width * (0.02 + i * 0.13))
-        building_height = int(
-            height * (0.20 + (i % 4) * 0.08)
-        )
+        x = int(width * (0.16 + i * 0.09))
 
         draw.rectangle(
             [
                 x,
-                int(height * 0.62) - building_height,
-                x + int(width * 0.09),
-                int(height * 0.62)
+                int(height * 0.43),
+                x + int(width * 0.05),
+                int(height * 0.54),
             ],
-            fill=(70, 75, 100)
+            fill=(90, 160, 210)
         )
 
 
@@ -454,19 +374,13 @@ def draw_palace(draw, width, height):
                 cx,
                 int(height * 0.10),
                 cx + int(width * 0.07),
-                bottom
+                bottom,
             ],
             fill=(205, 170, 90)
         )
 
 
-def draw_character(
-    draw,
-    width,
-    height,
-    side=0,
-    emotion="happy"
-):
+def draw_character(draw, width, height, side=0, sad=False):
     if side == 0:
         cx = int(width * 0.62)
     else:
@@ -474,13 +388,13 @@ def draw_character(
 
     cy = int(height * 0.49)
 
-    # Head
+    # Face
     draw.ellipse(
         [
             cx - 75,
             cy - 185,
             cx + 75,
-            cy - 35
+            cy - 35,
         ],
         fill=(245, 190, 145)
     )
@@ -491,7 +405,7 @@ def draw_character(
             cx - 80,
             cy - 205,
             cx + 80,
-            cy - 100
+            cy - 100,
         ],
         fill=(55, 35, 25)
     )
@@ -502,7 +416,7 @@ def draw_character(
             cx - 32,
             cy - 125,
             cx - 12,
-            cy - 102
+            cy - 102,
         ],
         fill=(20, 20, 20)
     )
@@ -512,7 +426,7 @@ def draw_character(
             cx + 12,
             cy - 125,
             cx + 32,
-            cy - 102
+            cy - 102,
         ],
         fill=(20, 20, 20)
     )
@@ -529,7 +443,7 @@ def draw_character(
             cx - 90,
             cy - 35,
             cx + 90,
-            cy + 200
+            cy + 200,
         ],
         radius=40,
         fill=shirt
@@ -541,7 +455,7 @@ def draw_character(
             cx - 65,
             cy + 5,
             cx - 155,
-            cy + 100
+            cy + 100,
         ],
         fill=shirt,
         width=35
@@ -552,7 +466,7 @@ def draw_character(
             cx + 65,
             cy + 5,
             cx + 155,
-            cy + 100
+            cy + 100,
         ],
         fill=shirt,
         width=35
@@ -564,7 +478,7 @@ def draw_character(
             cx - 35,
             cy + 190,
             cx - 65,
-            cy + 340
+            cy + 340,
         ],
         fill=(45, 45, 65),
         width=45
@@ -575,20 +489,20 @@ def draw_character(
             cx + 35,
             cy + 190,
             cx + 65,
-            cy + 340
+            cy + 340,
         ],
         fill=(45, 45, 65),
         width=45
     )
 
-    # Smile / sad expression
-    if emotion == "sad":
+    # Mouth
+    if sad:
         draw.arc(
             [
                 cx - 30,
                 cy - 75,
                 cx + 30,
-                cy - 30
+                cy - 30,
             ],
             200,
             340,
@@ -601,7 +515,7 @@ def draw_character(
                 cx - 30,
                 cy - 75,
                 cx + 30,
-                cy - 25
+                cy - 25,
             ],
             20,
             160,
@@ -610,13 +524,7 @@ def draw_character(
         )
 
 
-def create_cartoon_scene(
-    text,
-    index,
-    total,
-    width,
-    height
-):
+def create_cartoon_scene(text, index, total, width, height):
     image = Image.new(
         "RGB",
         (width, height),
@@ -634,10 +542,7 @@ def create_cartoon_scene(
         scene
     )
 
-    if scene in [
-        "forest",
-        "village"
-    ]:
+    if scene in ["forest", "village"]:
         draw_tree(
             draw,
             int(width * 0.08),
@@ -680,43 +585,54 @@ def create_cartoon_scene(
             height
         )
 
-    # Character
-    emotion = "happy"
-
-    if any(word in text for word in [
+    sad_words = [
         "दुख",
         "रोया",
         "रोने",
         "आंसू",
         "अकेला",
-        "डर"
-    ]):
-        emotion = "sad"
+        "डर",
+    ]
+
+    sad = any(
+        word in text
+        for word in sad_words
+    )
 
     draw_character(
         draw,
         width,
         height,
         side=index % 2,
-        emotion=emotion
+        sad=sad
     )
 
-    # Cinematic dark bars
-    bar_height = int(height * 0.055)
+    # Cinematic bars
+    bar = int(height * 0.055)
 
     draw.rectangle(
-        [0, 0, width, bar_height],
+        [0, 0, width, bar],
         fill=(10, 10, 15)
     )
 
     draw.rectangle(
+        [0, height - bar, width, height],
+        fill=(10, 10, 15)
+    )
+
+    # Scene number
+    font = get_font(
+        max(28, width // 70)
+    )
+
+    draw.text(
         [
-            0,
-            height - bar_height,
-            width,
-            height
+            int(width * 0.04),
+            int(height * 0.70)
         ],
-        fill=(10, 10, 15)
+        f"Scene {index + 1}",
+        fill=(255, 255, 255),
+        font=font
     )
 
     scene_file = (
@@ -742,7 +658,7 @@ def get_audio_duration(audio_file):
         "format=duration",
         "-of",
         "default=noprint_wrappers=1:nokey=1",
-        str(audio_file)
+        str(audio_file),
     ]
 
     result = subprocess.run(
@@ -758,157 +674,6 @@ def get_audio_duration(audio_file):
         )
     except Exception:
         return 60.0
-
-
-def make_single_scene_clip(
-    image_file,
-    output_file,
-    width,
-    height,
-    duration,
-    index
-):
-    # Gentle cinematic movement.
-    if index % 2 == 0:
-        zoom_filter = (
-            "zoompan="
-            "z='min(zoom+0.0007,1.12)':"
-            f"d={int(duration * 25)}:"
-            f"s={width}x{height}:"
-            "fps=25"
-        )
-    else:
-        zoom_filter = (
-            "zoompan="
-            "z='if(lte(zoom,1.0),1.12,max(zoom-0.0007,1.0))':"
-            f"d={int(duration * 25)}:"
-            f"s={width}x{height}:"
-            "fps=25"
-        )
-
-    command = [
-        "ffmpeg",
-        "-y",
-        "-loop",
-        "1",
-        "-i",
-        str(image_file),
-        "-t",
-        str(duration),
-        "-vf",
-        (
-            f"scale={width}:{height}:"
-            "force_original_aspect_ratio=increase,"
-            f"crop={width}:{height},"
-            f"{zoom_filter},"
-            "format=yuv420p"
-        ),
-        "-an",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "22",
-        "-pix_fmt",
-        "yuv420p",
-        output_file
-    ]
-
-    try:
-        subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True
-        )
-
-        return True
-
-    except subprocess.CalledProcessError:
-        return False
-
-
-def concat_scene_clips(
-    clip_files,
-    voice_file,
-    output_file,
-    duration
-):
-    if not clip_files:
-        return {
-            "status": "error",
-            "message": "No scene clips available."
-        }
-
-    list_file = OUTPUT_DIR / "video_list.txt"
-
-    with open(
-        list_file,
-        "w",
-        encoding="utf-8"
-    ) as file:
-        for clip in clip_files:
-            path = str(
-                Path(clip).resolve()
-            ).replace("'", "'\\''")
-
-            file.write(
-                f"file '{path}'\n"
-            )
-
-    command = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(list_file),
-        "-i",
-        str(voice_file),
-        "-map",
-        "0:v:0",
-        "-map",
-        "1:a:0",
-        "-t",
-        str(duration),
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "20",
-        "-pix_fmt",
-        "yuv420p",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        "-movflags",
-        "+faststart",
-        output_file
-    ]
-
-    try:
-        subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True
-        )
-
-        return {
-            "status": "success",
-            "file": output_file
-        }
-
-    except subprocess.CalledProcessError as error:
-        return {
-            "status": "error",
-            "message": error.stderr[-3000:]
-        }
 
 
 def make_cinematic_video(
@@ -930,61 +695,145 @@ def make_cinematic_video(
 
     scene_duration = 7.0
 
-    required_scenes = max(
+    required = max(
         1,
         math.ceil(
             duration / scene_duration
         )
     )
 
-    clip_files = []
-
-    for i in range(required_scenes):
-        image_file = scene_files[
-            i % len(scene_files)
-        ]
-
-        clip_file = (
-            CLIP_DIR /
-            f"clip_{i:03d}.mp4"
-        )
-
-        success = make_single_scene_clip(
-            image_file,
-            clip_file,
-            width,
-            height,
-            scene_duration,
-            i
-        )
-
-        if not success:
-            return {
-                "status": "error",
-                "message": (
-                    f"Failed to create "
-                    f"scene clip {i + 1}."
-                )
-            }
-
-        clip_files.append(clip_file)
-
-    result = concat_scene_clips(
-        clip_files,
-        voice_file,
-        output_file,
-        duration
+    list_file = (
+        OUTPUT_DIR /
+        "video_list.txt"
     )
 
-    if result.get("status") == "success":
-        result["resolution"] = (
-            f"{width}x{height}"
+    with open(
+        list_file,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        for i in range(required):
+            scene = scene_files[
+                i % len(scene_files)
+            ]
+
+            absolute_path = str(
+                scene.resolve()
+            )
+
+            absolute_path = (
+                absolute_path.replace(
+                    "'",
+                    "'\\''"
+                )
+            )
+
+            file.write(
+                f"file '{absolute_path}'\n"
+            )
+
+            file.write(
+                f"duration {scene_duration}\n"
+            )
+
+        # Required by FFmpeg concat demuxer
+        last_scene = scene_files[
+            (required - 1) % len(scene_files)
+        ]
+
+        absolute_path = str(
+            last_scene.resolve()
+        ).replace(
+            "'",
+            "'\\''"
         )
 
-        result["duration_seconds"] = duration
-        result["scenes"] = required_scenes
+        file.write(
+            f"file '{absolute_path}'\n"
+        )
 
-    return result
+    command = [
+        "ffmpeg",
+        "-y",
+
+        "-f",
+        "concat",
+
+        "-safe",
+        "0",
+
+        "-i",
+        str(list_file),
+
+        "-i",
+        str(voice_file),
+
+        "-map",
+        "0:v:0",
+
+        "-map",
+        "1:a:0",
+
+        "-vf",
+        (
+            f"scale={width}:{height}:"
+            "force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},"
+            "format=yuv420p"
+        ),
+
+        "-r",
+        "25",
+
+        "-t",
+        str(duration),
+
+        "-c:v",
+        "libx264",
+
+        "-preset",
+        "veryfast",
+
+        "-crf",
+        "21",
+
+        "-pix_fmt",
+        "yuv420p",
+
+        "-c:a",
+        "aac",
+
+        "-b:a",
+        "192k",
+
+        "-movflags",
+        "+faststart",
+
+        output_file,
+    ]
+
+    try:
+        result = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+
+        return {
+            "status": "success",
+            "file": output_file,
+            "resolution": f"{width}x{height}",
+            "duration_seconds": duration,
+            "scenes": required,
+        }
+
+    except subprocess.CalledProcessError as error:
+        return {
+            "status": "error",
+            "message": error.stderr[-4000:]
+        }
 
 
 def create_thumbnail(
@@ -1002,30 +851,25 @@ def create_thumbnail(
 
     draw = ImageDraw.Draw(image)
 
-    # Moon / sun
     draw.ellipse(
         [850, 60, 1080, 290],
         fill=(255, 215, 90)
     )
 
-    # Cartoon character
     draw_character(
         draw,
         width,
         height,
-        side=0,
-        emotion="happy"
+        side=0
     )
 
-    # Dark title panel
     draw.rectangle(
         [30, 490, 1250, 690],
         fill=(15, 20, 30)
     )
 
-    font = get_font(60)
+    font = get_font(58)
 
-    # Keep thumbnail text short.
     short_title = str(title)[:42]
 
     draw.text(
@@ -1053,9 +897,7 @@ def prepare_media(
 ):
     width, height = get_resolution()
 
-    # -------------------------
     # 1. Hindi voice
-    # -------------------------
     voice = create_voice(
         script,
         "output/voice.mp3"
@@ -1067,9 +909,7 @@ def prepare_media(
             "voice": voice
         }
 
-    # -------------------------
-    # 2. Split story
-    # -------------------------
+    # 2. Story scenes
     story_parts = split_story(
         script,
         maximum=30
@@ -1079,12 +919,10 @@ def prepare_media(
         story_parts = [
             title,
             "कहानी की शुरुआत एक छोटे से गांव से होती है।",
-            "लेकिन उस दिन कुछ ऐसा हुआ जिसने सबकी जिंदगी बदल दी।"
+            "लेकिन उस दिन कुछ ऐसा हुआ जिसने सबकी जिंदगी बदल दी।",
         ]
 
-    # -------------------------
-    # 3. Cartoon scenes
-    # -------------------------
+    # 3. Cartoon images
     scene_files = []
 
     for index, part in enumerate(
@@ -1100,9 +938,7 @@ def prepare_media(
 
         scene_files.append(scene)
 
-    # -------------------------
-    # 4. Cinematic video
-    # -------------------------
+    # 4. Video
     video = make_cinematic_video(
         scene_files,
         Path("output/voice.mp3"),
@@ -1111,9 +947,7 @@ def prepare_media(
         height
     )
 
-    # -------------------------
     # 5. Thumbnail
-    # -------------------------
     thumbnail = create_thumbnail(
         title,
         "output/thumbnail.jpg"
@@ -1128,12 +962,10 @@ def prepare_media(
             "status": "success",
             "type": "cinematic_cartoon",
             "scenes": len(scene_files),
-            "resolution": (
-                f"{width}x{height}"
-            )
+            "resolution": f"{width}x{height}",
         },
 
         "video": video,
 
-        "thumbnail": thumbnail
-        }
+        "thumbnail": thumbnail,
+}
